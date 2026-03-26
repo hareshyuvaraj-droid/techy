@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>CrowdGuard EC-9</title>
+<style>
+  :root {
+    --bg: #0d0d1a;
+    --panel: #13131f;
+    --border: #1e1e35;
+    --text: #e2e4f0;
+    --muted: #6b6b8a;
+    --safe: #00d46a;
+    --warning: #ffb300;
+    --critical: #ff3b3b;
+    --purple: #7c5cfc;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; min-height: 100vh; }
+
+  /* ── Auth Screen ── */
+  #auth-screen {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; background: var(--bg);
+  }
+  .auth-box {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 16px; padding: 40px; width: 380px;
+  }
+  .auth-box h1 { font-size: 1.5rem; margin-bottom: 4px; }
+  .auth-box p  { color: var(--muted); font-size: 0.85rem; margin-bottom: 28px; }
+  .auth-box input {
+    width: 100%; padding: 12px 14px; margin-bottom: 14px;
+    background: #1a1a2e; border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-size: 0.9rem;
+  }
+  .auth-box input:focus { outline: none; border-color: var(--purple); }
+  .btn {
+    width: 100%; padding: 12px; border: none; border-radius: 8px;
+    background: var(--purple); color: white; font-size: 0.95rem;
+    font-weight: 600; cursor: pointer; transition: opacity .2s;
+  }
+  .btn:hover { opacity: 0.85; }
+  .auth-toggle { text-align: center; margin-top: 16px; font-size: 0.85rem; color: var(--muted); }
+  .auth-toggle span { color: var(--purple); cursor: pointer; }
+  .auth-error { color: var(--critical); font-size: 0.82rem; margin-bottom: 10px; text-align: center; }
+
+  /* ── App Shell ── */
+  #app { display: none; flex-direction: column; min-height: 100vh; }
+
+  /* Navbar */
+  nav {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px;
+    background: var(--panel); border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .nav-logo { font-weight: 700; font-size: 1.1rem; letter-spacing: 1px; }
+  .nav-logo span { color: var(--purple); }
+  .nav-right { display: flex; gap: 16px; align-items: center; }
+  .ws-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .ws-dot.connected { background: var(--safe); box-shadow: 0 0 6px var(--safe); }
+  .nav-user { font-size: 0.82rem; color: var(--muted); }
+  .logout-btn {
+    padding: 6px 14px; border: 1px solid var(--border); border-radius: 6px;
+    background: transparent; color: var(--muted); font-size: 0.8rem; cursor: pointer;
+  }
+  .logout-btn:hover { border-color: var(--critical); color: var(--critical); }
+
+  /* Tabs */
+  .tabs {
+    display: flex; gap: 4px; padding: 12px 24px;
+    background: var(--panel); border-bottom: 1px solid var(--border);
+  }
+  .tab {
+    padding: 7px 18px; border-radius: 6px; font-size: 0.85rem;
+    cursor: pointer; color: var(--muted); border: none; background: transparent;
+    transition: all .2s;
+  }
+  .tab.active { background: var(--purple); color: white; }
+  .tab:hover:not(.active) { background: var(--border); color: var(--text); }
+
+  /* Main content */
+  main { padding: 24px; flex: 1; }
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* Stats row */
+  .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+  .stat-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px;
+  }
+  .stat-card .label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .stat-card .value { font-size: 1.9rem; font-weight: 700; margin-top: 6px; }
+  .stat-card .sub   { font-size: 0.78rem; color: var(--muted); margin-top: 4px; }
+
+  /* Zone grid */
+  .zone-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .zone-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px; transition: border-color .3s;
+  }
+  .zone-card.warning  { border-color: var(--warning); }
+  .zone-card.critical { border-color: var(--critical); animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100% { box-shadow: none; } 50% { box-shadow: 0 0 12px rgba(255,59,59,.35); } }
+
+  .zone-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
+  .zone-name   { font-weight: 600; font-size: 0.95rem; }
+  .zone-loc    { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+  .badge {
+    font-size: 0.7rem; font-weight: 700; padding: 3px 10px;
+    border-radius: 20px; letter-spacing: .5px;
+  }
+  .badge.safe     { background: rgba(0,212,106,.15); color: var(--safe); }
+  .badge.warning  { background: rgba(255,179,0,.15);  color: var(--warning); }
+  .badge.critical { background: rgba(255,59,59,.15);  color: var(--critical); }
+
+  .zone-count { font-size: 2rem; font-weight: 700; margin-bottom: 2px; }
+  .zone-cap   { font-size: 0.78rem; color: var(--muted); margin-bottom: 12px; }
+
+  /* Density bar */
+  .bar-wrap { background: #1a1a2e; border-radius: 4px; height: 8px; margin-bottom: 10px; overflow: hidden; }
+  .bar-fill  { height: 100%; border-radius: 4px; transition: width .6s ease, background .3s; }
+
+  .zone-meta { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--muted); }
+  .risk-badge {
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
+    font-size: 0.72rem; font-weight: 600;
+  }
+
+  /* Alerts table */
+  .alerts-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .alerts-header h2 { font-size: 1rem; }
+  .filter-row { display: flex; gap: 8px; }
+  .filter-btn {
+    padding: 5px 14px; border: 1px solid var(--border); border-radius: 6px;
+    background: transparent; color: var(--muted); font-size: 0.78rem; cursor: pointer;
+  }
+  .filter-btn.active { border-color: var(--purple); color: var(--purple); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th { text-align: left; padding: 10px 12px; color: var(--muted); font-weight: 500;
+       border-bottom: 1px solid var(--border); font-size: 0.75rem; text-transform: uppercase; }
+  td { padding: 12px 12px; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,.02); }
+
+  .resolve-btn {
+    padding: 4px 12px; border: 1px solid var(--border); border-radius: 4px;
+    background: transparent; color: var(--muted); font-size: 0.75rem; cursor: pointer;
+  }
+  .resolve-btn:hover { border-color: var(--safe); color: var(--safe); }
+
+  /* Loading */
+  .loading { text-align: center; padding: 60px; color: var(--muted); }
+  .spinner { width: 32px; height: 32px; border: 3px solid var(--border);
+             border-top-color: var(--purple); border-radius: 50%;
+             animation: spin .7s linear infinite; margin: 0 auto 16px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  @media (max-width: 900px) {
+    .zone-grid { grid-template-columns: repeat(2, 1fr); }
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 600px) {
+    .zone-grid { grid-template-columns: 1fr; }
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── AUTH SCREEN ─────────────────────────────────────────────────────────── -->
+<div id="auth-screen">
+  <div class="auth-box">
+    <h1>🛡 CrowdGuard</h1>
+    <p>EC-9 Crowd Monitoring System</p>
+    <div id="auth-error" class="auth-error" style="display:none"></div>
+    <input id="auth-name" type="text" placeholder="Full Name" style="display:none"/>
+    <input id="auth-email" type="email" placeholder="Email"/>
+    <input id="auth-password" type="password" placeholder="Password"/>
+    <button class="btn" onclick="submitAuth()">Login</button>
+    <div class="auth-toggle">
+      Don't have an account? <span onclick="toggleAuth()">Register</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── APP ────────────────────────────────────────────────────────────────── -->
+<div id="app">
+  <nav>
+    <div class="nav-logo">CROWD<span>GUARD</span> <span style="font-size:.7rem;color:var(--muted);font-weight:400">EC-9</span></div>
+    <div class="nav-right">
+      <div class="ws-dot" id="ws-dot" title="WebSocket"></div>
+      <span class="nav-user" id="nav-user"></span>
+      <button class="logout-btn" onclick="logout()">Logout</button>
+    </div>
+  </nav>
+
+  <div class="tabs">
+    <button class="tab active" onclick="showPage('dashboard', this)">📊 Dashboard</button>
+    <button class="tab" onclick="showPage('alerts', this)">🚨 Alerts</button>
+  </div>
+
+  <main>
+    <!-- Dashboard -->
+    <div id="page-dashboard" class="page active">
+      <div class="stats-row" id="stats-row">
+        <div class="stat-card"><div class="label">Total Zones</div><div class="value" id="stat-zones">—</div><div class="sub">monitored</div></div>
+        <div class="stat-card"><div class="label">Critical</div><div class="value" style="color:var(--critical)" id="stat-critical">—</div><div class="sub">zones at risk</div></div>
+        <div class="stat-card"><div class="label">Total People</div><div class="value" id="stat-people">—</div><div class="sub">detected now</div></div>
+        <div class="stat-card"><div class="label">Alerts Today</div><div class="value" id="stat-alerts">—</div><div class="sub">unresolved</div></div>
+      </div>
+      <div class="zone-grid" id="zone-grid">
+        <div class="loading"><div class="spinner"></div>Connecting...</div>
+      </div>
+    </div>
+
+    <!-- Alerts -->
+    <div id="page-alerts" class="page">
+      <div class="alerts-header">
+        <h2>Alert History</h2>
+        <div class="filter-row">
+          <button class="filter-btn active" onclick="filterAlerts('all', this)">All</button>
+          <button class="filter-btn" onclick="filterAlerts('critical', this)">Critical</button>
+          <button class="filter-btn" onclick="filterAlerts('warning', this)">Warning</button>
+          <button class="filter-btn" onclick="filterAlerts('unresolved', this)">Unresolved</button>
+        </div>
+      </div>
+      <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;overflow:hidden">
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th><th>Zone</th><th>Level</th><th>Message</th><th>Density</th><th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="alerts-tbody">
+            <tr><td colspan="6" style="text-align:center;color:var(--muted);padding:40px">Loading alerts...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+// ── Config — change API_URL to your Render backend URL after deploy ──────────
+const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? 'http://localhost:8000'
+  : 'https://YOUR-BACKEND.onrender.com';  // ← REPLACE THIS after Render deploy
+
+const WS_URL = API_URL.replace('https', 'wss').replace('http', 'ws') + '/ws/live';
+
+// ── State ────────────────────────────────────────────────────────────────────
+let token     = localStorage.getItem('cg_token') || '';
+let userName  = localStorage.getItem('cg_name')  || '';
+let isLogin   = true;
+let ws        = null;
+let alertFilter = 'all';
+
+// ── Auth ─────────────────────────────────────────────────────────────────────
+function toggleAuth() {
+  isLogin = !isLogin;
+  document.getElementById('auth-name').style.display = isLogin ? 'none' : 'block';
+  document.querySelector('.btn').textContent = isLogin ? 'Login' : 'Register';
+  document.querySelector('.auth-toggle').innerHTML = isLogin
+    ? `Don't have an account? <span onclick="toggleAuth()">Register</span>`
+    : `Already have an account? <span onclick="toggleAuth()">Login</span>`;
+}
+
+async function submitAuth() {
+  const email    = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+  const name     = document.getElementById('auth-name').value.trim();
+  const errEl    = document.getElementById('auth-error');
+  errEl.style.display = 'none';
+
+  if (!email || !password) { showAuthError('Please fill all fields'); return; }
+
+  try {
+    const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
+    const body     = isLogin ? { email, password } : { name, email, password, role: 'viewer' };
+    const res      = await fetch(API_URL + endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) { showAuthError(data.detail || 'Auth failed'); return; }
+
+    token    = data.token;
+    userName = data.name;
+    localStorage.setItem('cg_token', token);
+    localStorage.setItem('cg_name',  userName);
+    showApp();
+  } catch (e) {
+    showAuthError('Cannot connect to backend. Is it running?');
+  }
+}
+
+function showAuthError(msg) {
+  const el = document.getElementById('auth-error');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function logout() {
+  token = ''; userName = '';
+  localStorage.removeItem('cg_token');
+  localStorage.removeItem('cg_name');
+  if (ws) { ws.close(); ws = null; }
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('auth-screen').style.display = 'flex';
+}
+
+// ── App init ─────────────────────────────────────────────────────────────────
+function showApp() {
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  document.getElementById('nav-user').textContent = userName;
+  connectWS();
+  loadAlerts();
+  loadAlertStats();
+}
+
+if (token) showApp();
+
+// ── WebSocket ────────────────────────────────────────────────────────────────
+function connectWS() {
+  if (ws) ws.close();
+  ws = new WebSocket(WS_URL + '?token=' + token);
+
+  ws.onopen = () => {
+    document.getElementById('ws-dot').classList.add('connected');
+  };
+
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'zone_update') renderZones(msg.zones);
+  };
+
+  ws.onclose = () => {
+    document.getElementById('ws-dot').classList.remove('connected');
+    setTimeout(connectWS, 3000);
+  };
+
+  ws.onerror = () => ws.close();
+}
+
+// ── Zone rendering ────────────────────────────────────────────────────────────
+function barColor(pct) {
+  if (pct >= 80) return 'var(--critical)';
+  if (pct >= 60) return 'var(--warning)';
+  return 'var(--safe)';
+}
+
+function renderZones(zones) {
+  const grid = document.getElementById('zone-grid');
+  grid.innerHTML = zones.map(z => {
+    const pct = z.pct.toFixed(1);
+    const rs  = z.risk_score;
+    const riskColor = rs >= 70 ? 'var(--critical)' : rs >= 40 ? 'var(--warning)' : 'var(--safe)';
+    return `
+    <div class="zone-card ${z.status}">
+      <div class="zone-header">
+        <div>
+          <div class="zone-name">Zone ${z.zone_id} — ${z.name}</div>
+          <div class="zone-loc">📍 ${z.location || '—'}</div>
+        </div>
+        <span class="badge ${z.status}">${z.status.toUpperCase()}</span>
+      </div>
+      <div class="zone-count">${z.count}</div>
+      <div class="zone-cap">of ${z.capacity} capacity</div>
+      <div class="bar-wrap">
+        <div class="bar-fill" style="width:${Math.min(pct,100)}%;background:${barColor(z.pct)}"></div>
+      </div>
+      <div class="zone-meta">
+        <span>${pct}% density</span>
+        <span>${z.flow_direction || '─'}</span>
+        <span class="risk-badge" style="background:${riskColor}22;color:${riskColor}">
+          Risk ${rs}/100
+        </span>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Update stats
+  const critical = zones.filter(z => z.status === 'critical').length;
+  const people   = zones.reduce((s, z) => s + z.count, 0);
+  document.getElementById('stat-zones').textContent    = zones.length;
+  document.getElementById('stat-critical').textContent = critical;
+  document.getElementById('stat-people').textContent   = people.toLocaleString();
+}
+
+// ── Alerts ────────────────────────────────────────────────────────────────────
+async function loadAlerts() {
+  try {
+    const params = alertFilter === 'unresolved'
+      ? '?limit=100'
+      : alertFilter === 'all' ? '?limit=100' : `?level=${alertFilter}&limit=100`;
+    const res  = await fetch(API_URL + '/api/alerts' + params, {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    const data = await res.json();
+    const filtered = alertFilter === 'unresolved' ? data.filter(a => !a.resolved) : data;
+    renderAlerts(filtered);
+  } catch(e) {
+    document.getElementById('alerts-tbody').innerHTML =
+      '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:40px">Failed to load alerts</td></tr>';
+  }
+}
+
+async function loadAlertStats() {
+  try {
+    const res  = await fetch(API_URL + '/api/alerts/stats', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    const data = await res.json();
+    document.getElementById('stat-alerts').textContent = data.unresolved || 0;
+  } catch(e) {}
+}
+
+function renderAlerts(alerts) {
+  const tbody = document.getElementById('alerts-tbody');
+  if (!alerts.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:40px">No alerts found</td></tr>';
+    return;
+  }
+  tbody.innerHTML = alerts.map(a => {
+    const color = a.level === 'critical' ? 'var(--critical)' : 'var(--warning)';
+    const time  = new Date(a.timestamp).toLocaleTimeString();
+    return `
+    <tr>
+      <td style="color:var(--muted);font-size:.8rem">${time}</td>
+      <td><strong>Zone ${a.zone_id}</strong><br><span style="color:var(--muted);font-size:.75rem">${a.zone_name}</span></td>
+      <td><span class="badge ${a.level}">${a.level.toUpperCase()}</span></td>
+      <td style="font-size:.82rem;max-width:320px">${a.message}</td>
+      <td style="color:${color};font-weight:600">${a.density_pct.toFixed(1)}%</td>
+      <td>${a.resolved
+        ? '<span style="color:var(--safe);font-size:.78rem">✓ Resolved</span>'
+        : `<button class="resolve-btn" onclick="resolveAlert('${a.id}', this)">Resolve</button>`
+      }</td>
+    </tr>`;
+  }).join('');
+}
+
+async function resolveAlert(id, btn) {
+  btn.disabled = true;
+  btn.textContent = '...';
+  try {
+    await fetch(API_URL + `/api/alerts/${id}/resolve`, {
+      method: 'PATCH',
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    loadAlerts();
+    loadAlertStats();
+  } catch(e) { btn.disabled = false; btn.textContent = 'Resolve'; }
+}
+
+function filterAlerts(f, btn) {
+  alertFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  loadAlerts();
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function showPage(page, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  btn.classList.add('active');
+  if (page === 'alerts') loadAlerts();
+}
+
+// Refresh alerts every 10s
+setInterval(() => { if (token) { loadAlerts(); loadAlertStats(); } }, 10000);
+</script>
+</body>
+</html>

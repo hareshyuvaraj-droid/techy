@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: crowdguard-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: MONGO_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: DB_NAME
+        value: crowdguard
+      - key: FRONTEND_URL
+        sync: false
+
+  - type: web
+    name: crowdguard-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: echo "static"
+    staticPublishPath: .
